@@ -1,0 +1,5 @@
+{
+  "name": "ambition",
+  "owner": { "name": "AlanCHAIBI" },
+  "plugins": [{ "name": "ambition-mod", "source": "./" }]
+}

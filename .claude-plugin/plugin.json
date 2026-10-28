@@ -1,0 +1,8 @@
+{
+  "name": "ambition-mod",
+  "version": "1.0.0",
+  "description": "/ambition rewrites a draft prompt to be more ambitious (outcome-first, raw material, outside verification, optional proposals) without sending it.",
+  "author": { "name": "AlanCHAIBI" },
+  "license": "MIT",
+  "repository": "https://github.com/AlanCHAIBI/ambition"
+}
