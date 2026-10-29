@@ -1,0 +1,31 @@
+[
+  { "id": "thin-en", "case": "C", "level": "normal", "draft": "write me a report on this quarter's churn" },
+  { "id": "thin-fr", "case": "C", "level": "low", "draft": "fais un script qui sauvegarde mes photos" },
+  { "id": "decision", "case": "C", "level": "high", "draft": "which database should I use for my side project?" },
+  { "id": "recurring", "case": "C", "level": "normal", "draft": "nettoie les logs du serveur chaque semaine" },
+  { "id": "ambitious", "case": "A", "level": "normal", "draft": "Goal: cut the p95 latency of GET /search from 900 ms to under 300 ms. Start from the last 7 days of traces in traces/search.jsonl. Profile with the existing bench (npm run bench:search), fix the two biggest hotspots, and prove it by rerunning the bench on the same traces and comparing p95 before and after." },
+  { "id": "vague-en", "case": "B", "level": "normal", "draft": "help with the thing" },
+  { "id": "vague-fr", "case": "B", "level": "low", "draft": "améliore ça" },
+  { "id": "follow-up", "case": "D", "level": "normal", "draft": "same as before but for the other file" },
+  { "id": "very-vague-fr", "case": "B", "level": "normal", "draft": "rends-le mieux" },
+  { "id": "precise-no-method", "case": "C", "level": "low", "draft": "Ajoute à /ambition une option lang qui force la langue de la réponse (fr ou en), quelle que soit la langue du brouillon." },
+  { "id": "ambitious-fr", "case": "A", "level": "low", "draft": "Objectif : faire passer /ambition low sous 6 s par appel, mesuré par la dernière ligne de cost() sur 5 appels du même brouillon. Pars de la mesure actuelle : 12 s, 4,3k tokens en entrée, 2,1k en sortie. Méthode : réduire d'abord la sortie, puis l'entrée de context(). Vérification : rejouer les 5 appels avant et après, et garder les 23 tests verts avec claude plugin test ." },
+  {
+    "id": "trap-existing-command", "case": "D", "level": "low",
+    "context": "assistant: /ambition stop existe déjà : il annule la réécriture en cours. Pour /ambition bench, j'ai ajouté la comparaison de chaque brouillon avec le passage précédent.",
+    "draft": "Fais pareil que pour le bench, mais pour la commande stop.",
+    "forbid": ["(conçois|implémente|crée|create|implement)[^.\\n]{0,40}commande « ?stop"]
+  },
+  {
+    "id": "trap-stale-plan", "case": "C", "level": "low",
+    "context": "assistant: Je mets à jour le README, qui décrit encore le fork, Opus et les quatre sections.\n\nassistant: C'est fait : le README décrit maintenant le fonctionnement actuel, sans fork, en trois sections.",
+    "draft": "Ajoute une courte FAQ au README.",
+    "forbid": ["README[^\\n.]*(décrit encore|périmé|ancien fonctionnement)"]
+  },
+  {
+    "id": "trap-session-leak", "case": "C", "level": "normal",
+    "context": "user: les temps réels du niveau high n'ont pas encore été mesurés.",
+    "draft": "Écris un mail court pour annoncer la nouvelle version du mod à mon ami.",
+    "forbid": ["\\bhigh\\b"]
+  }
+]
