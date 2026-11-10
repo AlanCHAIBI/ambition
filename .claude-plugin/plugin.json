@@ -1,6 +1,6 @@
 {
   "name": "ambition-mod",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "/ambition rewrites a draft prompt to be more ambitious (outcome-first, raw material, outside verification, optional proposals) in seconds, from what your session knows and the code, ending with an interview for what only you can answer, into your prompt box (go sends it).",
   "author": { "name": "AlanCHAIBI" },
   "license": "MIT",

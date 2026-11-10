@@ -19,6 +19,11 @@ const LOW_WORDS = 250 // "keep the prompt short" at low
 export type Draft = { id: string; case: 'A' | 'B' | 'C' | 'D'; level: string; draft: string; context?: string; forbid?: string[] }
 export type Citation = { text: string; path: string; line?: number }
 export type Improved = { prompt: string; start: number; end: number; blocks: number }
+export type Aimed = { args: string; files: string[]; typed: string }
+
+// A file at the head of a message: @"C:\a b.pdf", or a bare @src/a.ts (a dot or a slash, so @Bob is not one)
+const HEAD_FILE = /^@(?:"([^"\n]+)"|([^\s"]*[\\/.][^\s"]*))(?=\s|$)/
+const PASTED = /^<pasted_content[^>]*>\s*/
 
 const words = (text: string) => text.split(/\s+/).filter(Boolean).length
 // An accent, or two French function words: one alone ("LA", "des") also turns up in English.
@@ -44,6 +49,48 @@ export function localize(text: string, draft: string): string {
 // ("pas l'historique git") is left out, and so are git diff and git status, which show work not committed yet.
 export function historyPointers(prompt: string): string[] {
   return prompt.split(/(?<=[.;!?])\s+|\n/).filter(s => /git log|historique (git|des commits)|diff des commits|(commit|git) history/i.test(s) && !/\b(pas|jamais|ni|sans|not|never|without|instead)\b/i.test(s))
+}
+
+// Letters to change, add, drop or swap to go from one word to the other.
+function distance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)))
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i]![j] = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1))
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i]![j] = Math.min(d[i]![j]!, d[i - 2]![j - 2]! + 1)
+    }
+  }
+  return d[a.length]![b.length]!
+}
+
+// A message meant for the command that the app sent as plain text: the word a letter or two off, or behind the files the
+// app puts first or the wrapper of a message pasted whole. The files come back apart, the rest as the command's arguments.
+export function aimedAt(text: string, name: string): Aimed | undefined {
+  const files: string[] = []
+  const skipFiles = (from: string) => {
+    let rest = from.trimStart()
+    for (let m = rest.match(HEAD_FILE); m; m = rest.match(HEAD_FILE)) {
+      files.push(m[1] ?? m[2]!)
+      rest = rest.slice(m[0].length).trimStart()
+    }
+    return rest
+  }
+  let rest = skipFiles(text)
+  if (PASTED.test(rest)) rest = skipFiles(rest.replace(PASTED, '').replace(/\s*<\/pasted_content>/, ''))
+  const typed = rest.match(/^\/([\p{L}-]+)(?=\s|$)/u)?.[1]
+  if (!typed) return undefined
+  const word = typed.toLowerCase()
+  if (word !== name && (word.length < 6 || distance(word, name) > 2)) return undefined
+  return { args: rest.slice(typed.length + 1).trim(), files, typed }
+}
+
+// The files a text attaches by a quoted mention: @"C:\a b.pdf"
+export const mentions = (text: string) => [...text.matchAll(/@"([^"\n]+)"/g)].map(m => m[1]!)
+
+// The prompt with a mention of each file the rewrite left out, so they stay attached when it is sent.
+export function withMentions(prompt: string, files: readonly string[]): string {
+  const missing = files.filter(f => !prompt.includes(f))
+  return missing.length ? `${missing.map(f => `@"${f}"`).join(' ')}\n\n${prompt}` : prompt
 }
 
 // The improved prompt: the fenced blocks of the first section, joined, so a reply that splits it still delivers all of it.

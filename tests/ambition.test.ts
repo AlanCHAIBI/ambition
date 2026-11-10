@@ -1,7 +1,7 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-import { check, citations, historyPointers, improved, localize } from '../hooks/output'
+import { aimedAt, check, citations, historyPointers, improved, localize, withMentions } from '../hooks/output'
 import { V2 } from '../hooks/v2'
 
 // The engine beneath the mod: every call the mod makes is answered and recorded here.
@@ -39,6 +39,8 @@ function world(on: On, clock: ReturnType<typeof mock.clock>, w: World) {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.surfaces', () => ({ value: (w.surfaces ?? ['terminal']) as any }))
   on('session.cwd', () => ({ value: 'C:\\proj\\demo' }))
+  on('session.id', () => ({ value: 'session-1' }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
   on('session.model', () => ({ value: w.sessionModel ?? 'claude-opus-5-5' }))
   on('session.messages', () => ({
     value: (w.messages ?? [
@@ -93,6 +95,8 @@ async function start($: any, on: On, w: World = {}) {
 const run = ($: any, args: string) =>
   $.command.run({ command: 'ambition', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })
 const notice = (rows: any) => (rows.appended().at(-1)?.message.content[0] as any)?.text as string
+// The person pressing Enter on a message the app did not take for a command.
+const submit = ($: any, text: string, extra: object = {}) => $.prompt.submit({ text, origin: { kind: 'composer' }, wait: false, ...extra })
 
 test('no draft prints the usage', async ($, on) => {
   await start($, on)
@@ -316,6 +320,107 @@ test('a second command before the first one has started finds the job taken', as
   await clock.settle()
   expect(seen.completes).toHaveLength(1)
   expect((await run($, 'stop')).text).toBe('/ambition: nothing to stop.')
+})
+
+test('aimedAt: the word a letter or two off, behind files or a whole paste; anything else is left alone', async () => {
+  expect(aimedAt('/ambiton high fix it', 'ambition')).toEqual({ args: 'high fix it', files: [], typed: 'ambiton' })
+  expect(aimedAt('/Ambtion low x', 'ambition')?.args).toBe('low x')
+  expect(aimedAt('@"Z:\\a b.xlsx" @notes/c.md\n/ambition high\nrewrite it', 'ambition')).toEqual({ args: 'high\nrewrite it', files: ['Z:\\a b.xlsx', 'notes/c.md'], typed: 'ambition' })
+  expect(aimedAt('<pasted_content id="x">\n/ambition low y\n</pasted_content>', 'ambition')).toEqual({ args: 'low y', files: [], typed: 'ambition' })
+  expect(aimedAt(' <pasted_content id="x"> @"a.pdf" /ambiton z </pasted_content> more', 'ambition')).toEqual({ args: 'z more', files: ['a.pdf'], typed: 'ambiton' })
+  for (const other of ['/ambitionner x', '/ambition-dev x', 'merci pour /ambition', '/amb x', '@Bob /ambition x', '/review x', 'write the report']) expect(aimedAt(other, 'ambition')).toBeUndefined()
+  expect(withMentions('do it', ['a.pdf', 'b c.md'])).toBe('@"a.pdf" @"b c.md"\n\ndo it')
+  expect(withMentions('read @"a.pdf" first', ['a.pdf'])).toBe('read @"a.pdf" first')
+})
+
+test('a message meant for /ambition that the app sent as text runs the command and never reaches the model', async ($, on) => {
+  const { clock, seen } = await start($, on)
+  const r = await submit($, '/ambiton low fix the login bug')
+  expect(r.drop).toMatch(/^\/ambiton read as \/ambition\. \/ambition low: rewriting in the background/)
+  expect(seen.submits).toHaveLength(0)
+  await clock.settle()
+  expect(seen.completes[0].prompt).toContain('<draft>\nfix the login bug\n</draft>')
+  expect(seen.fills).toEqual(['IMPROVED'])
+})
+
+test('files the app put before the command stay attached to the improved prompt, and the rewrite reads the text ones', async ($, on) => {
+  const { clock, seen } = await start($, on, { disk: { 'notes.md': 'the notes' } })
+  const r = await submit($, '@"Z:\\Stock\\inv.xlsx" @"C:\\w\\notes.md"\n/ambition low\nbuild the app')
+  expect(r.drop).toMatch(/^\/ambition low: rewriting in the background/)
+  await clock.settle()
+  const { prompt } = seen.completes[0]
+  expect(prompt).toContain('<file name="inv.xlsx"/>')
+  expect(prompt).toContain('<file name="notes.md">\nthe notes\n</file>')
+  expect(prompt).toContain('<draft>\nbuild the app\n</draft>')
+  expect(seen.fills).toEqual(['@"Z:\\Stock\\inv.xlsx" @"C:\\w\\notes.md"\n\nIMPROVED'])
+})
+
+test('a file quoted inside the draft of a recognised command stays attached too', async ($, on) => {
+  const { clock, seen } = await start($, on)
+  await run($, 'low compare @"D:\\a.pdf" with last year')
+  await clock.settle()
+  expect(seen.fills).toEqual(['@"D:\\a.pdf"\n\nIMPROVED'])
+})
+
+test('an image that cannot follow: the improved prompt is told to ask for it before starting', async ($, on) => {
+  const { clock, seen } = await start($, on)
+  await submit($, '/ambiton low look at this', { attachments: [{ type: 'image', mediaType: 'image/png' }] })
+  await clock.settle()
+  expect(seen.completes[0].prompt).toContain('1 image(s) or document(s) that cannot stay attached')
+  expect(seen.completes[0].prompt).toContain('ask for them before it starts')
+  expect(V2.method).toContain('neither attaches nor locates is such a question: the model asks for it before it starts')
+})
+
+test('other prompts pass, and so does one from a plugin or a command the engine runs', async ($, on) => {
+  const { seen } = await start($, on)
+  expect((await submit($, 'fix the login bug')).text).toBe('fix the login bug')
+  expect((await submit($, '/ambiton x', { origin: { kind: 'plugin', name: 'other' } })).drop).toBeUndefined()
+  expect((await submit($, '/ambitions x', { command: { name: 'ambitions', args: 'x' } })).drop).toBeUndefined()
+  expect(seen.completes).toHaveLength(0)
+})
+
+test('a result ready while no window is attached waits for one to come back, once', async ($, on) => {
+  const w: { -readonly [K in keyof World]: World[K] } = { slow: true }
+  const { clock, rows, seen } = await start($, on, w)
+  await run($, 'low fix it')
+  await clock.settle()
+  w.surfaces = [] // the person moved to another session
+  await clock.advance(60000)
+  await clock.settle()
+  expect(rows.appended()).toHaveLength(0)
+  expect(seen.notices).toEqual(['/ambition low: done, see the transcript'])
+  expect((await run($, 'stop')).text).toBe('/ambition: nothing to stop.')
+
+  w.surfaces = ['desktop']
+  await $.session.attach({ surface: 'desktop', clientId: 'app' })
+  await clock.advance(1000)
+  await clock.settle()
+  expect(seen.fills).toEqual(['IMPROVED', 'IMPROVED']) // refused with no window, taken on the way back
+  expect(notice(rows)).toContain('```\nIMPROVED\n```')
+  expect(notice(rows)).toContain('in your prompt box: edit it, then Enter')
+  expect(notice(rows)).not.toContain('not sent')
+
+  await $.session.attach({ surface: 'desktop', clientId: 'phone' })
+  await clock.advance(1000)
+  await clock.settle()
+  expect(rows.appended()).toHaveLength(1)
+})
+
+test('coming back to a box already in use: the held result stays in the chat alone', async ($, on) => {
+  const w: { -readonly [K in keyof World]: World[K] } = { slow: true }
+  const { clock, rows, seen } = await start($, on, w)
+  await run($, 'low fix it')
+  await clock.settle()
+  w.surfaces = []
+  await clock.advance(60000)
+  await clock.settle()
+  w.surfaces = ['desktop']
+  w.box = 'something I typed'
+  await $.session.attach({ surface: 'desktop', clientId: 'app' })
+  await clock.advance(1000)
+  await clock.settle()
+  expect(seen.fills).toEqual(['IMPROVED']) // the attempt with no window, none on the way back
+  expect(notice(rows)).toContain('not sent: copy the improved prompt')
 })
 
 test('last puts the latest improved prompt back in the box', async ($, on) => {

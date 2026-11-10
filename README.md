@@ -29,6 +29,10 @@ Answer `y` to add the marketplace, then pick a scope. In the desktop app, where 
 
 Example: `/ambition high write me a report on this quarter's churn`, or `/ambition go high ...` to send the result at once. To start a draft with the word "go", put the level first: `/ambition normal go through the logs`.
 
+The app only runs a command when the message starts with it. The mod also catches a message meant for it that the app sent as plain text: the name a letter or two off (`/ambiton`), a message whose attached files the app put first, or a message pasted whole. It runs the rewrite instead, and the message never reaches the session.
+
+Attached files stay attached: their `@"..."` mentions go back at the top of the improved prompt, and the rewrite reads the first 2,000 characters of the text ones (the others, such as Excel or PDF files, are only named). An image cannot follow into the improved prompt, so the prompt tells the model to ask for what the draft relies on but does not attach before it starts.
+
 - `low`: one Sonnet request at low effort: clarify, raise the goal one notch, add one outside check, in a short prompt (at most 2 proposals).
 - `normal` (default): one Sonnet request at low effort: outcome and depth, plus an outside check (up to 3 proposals).
 - `high`: the same, plus range, a hard specific goal and a test of your assumptions (up to 5 proposals), one Sonnet request at medium effort. Every file and line the improved prompt cites is then checked on disk; only if one is wrong does one short request return the prompt with those citations fixed. On 36 scored runs, Sonnet matched the session's Opus on every rule in about half the time (13 s against 23 s).
@@ -39,7 +43,7 @@ Every level also sees the same condensed view of the session, about 2 to 3 thous
 
 What only you can answer, a decision of yours or a fact only you hold, never becomes a placeholder: the improved prompt ends by telling the model that receives it to interview you before starting, the way grill-me does. It asks in rounds, numbers each question and gives its recommended answer, looks up any fact it can find itself, and starts once nothing is left open. The first round is already written, at most 4 questions. Since this is part of the method, it works with any AI.
 
-It runs in the background: the step in progress shows below the prompt, and a notification comes at the end. The improved prompt then lands in your prompt box (only if the box is empty, so nothing you typed meanwhile is lost); with `go` it is sent at once, marked as sent by the mod rather than typed by you, since the rewrite drew on files you have not read. `go` puts a prompt that still holds a placeholder in the box instead of sending it. The other two sections (optional proposals, what only you can provide) appear in the transcript. In a `-p` run or the SDK, with nothing to show a background result on, the answer comes back as the command's output.
+It runs in the background: the step in progress shows below the prompt, and a notification comes at the end. The improved prompt then lands in your prompt box (only if the box is empty, so nothing you typed meanwhile is lost); if you left the session's window meanwhile, the result waits for you and appears when you come back, in the chat and in the box if it is empty. With `go` it is sent at once, marked as sent by the mod rather than typed by you, since the rewrite drew on files you have not read. `go` puts a prompt that still holds a placeholder in the box instead of sending it. The other two sections (optional proposals, what only you can provide) appear in the transcript. In a `-p` run or the SDK, with nothing to show a background result on, the answer comes back as the command's output.
 
 - `/ambition last` puts the latest improved prompt back in your prompt box (it is kept between sessions).
 - `/ambition stop` cancels the running rewrite. One rewrite runs at a time.
